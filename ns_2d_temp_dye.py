@@ -5,15 +5,15 @@
 """
 import numpy as np
 import matplotlib.pyplot as plt
-
+from matplotlib.animation import FuncAnimation
 
 # ============================================================================
 # SIMULATION PARAMETERS
 # ============================================================================
 
 # Grid parameters
-NX = 100  # number of nodes in x direction (includes boundary points)
-NY = 100  # number of nodes in y direction
+NX = 200  # number of nodes in x direction (includes boundary points)
+NY = 200  # number of nodes in y direction
 LX = 1.0  # domain length in x direction [m]
 LY = 1.0  # domain length in y direction [m]
 
@@ -27,7 +27,7 @@ KINEMATIC_VISCOSITY = 1.0e-4   # Higher viscosity for stability [m²/s]
 RHO = 1.225  # density [kg/m³]
 
 # Thermal properties (for air at ~300K)
-THERMAL_CONDUCTIVITY = 0.026    # k [W/(m·K)]
+THERMAL_CONDUCTIVITY = 0.26    # k [W/(m·K)]
 SPECIFIC_HEAT = 1005.0          # cp [J/(kg·K)]
 THERMAL_DIFFUSIVITY = THERMAL_CONDUCTIVITY / (RHO * SPECIFIC_HEAT)  # α = k/(ρ·cp) [m²/s]
 
@@ -69,6 +69,10 @@ def main():
     p = np.zeros_like(X)  # pressure [Pa]
     T = np.full_like(X, INITIAL_TEMPERATURE)  # temperature [K]
     
+    u_hist = []
+    v_hist = []
+    T_hist = []
+
     # ========================================================================
     # FINITE DIFFERENCE OPERATORS
     # ========================================================================
@@ -171,7 +175,7 @@ def main():
         p[:, 0] = p[:, 1] # neumann: ∂p/∂x = 0
         T[:, 0] = INLET_TEMPERATURE  # hot inlet
 
-        # outlet
+        # outlet1
         u[:, -1] = u[:, -2] # neumann: ∂u/∂x = 0
         v[:, -1] = v[:, -2] # neumann: ∂v/∂x = 0
         p[:, -1] = 0.0 # dirichlet: fixed pressure (reference)
@@ -189,7 +193,7 @@ def main():
         
         # center box of walls for fun
         BOX = False
-        TANK = False
+        TANK = True
         if BOX == True:
             u[int(np.floor(NY/3)):int(np.floor(2*NY/3)),int(np.floor(2*NX/5)):int(np.floor(3*NX/5))] = 0.0
             v[int(np.floor(NY/3)):int(np.floor(2*NY/3)),int(np.floor(2*NX/5)):int(np.floor(3*NX/5))] = 0.0
@@ -347,7 +351,10 @@ def main():
         
         # Update solution fields
         u, v, p, T = u_new, v_new, p_new, T_new
-        
+        u_hist.append(u)
+        v_hist.append(v)
+        T_hist.append(T)
+
         # Progress output with stability monitoring
         if (timestep + 1) % 100 == 0:
             T_max, T_min = np.max(T), np.min(T)
@@ -367,62 +374,83 @@ def main():
     
     print("\nSimulation completed!")
     
+
     # ========================================================================
     # VISUALIZATION
     # ========================================================================
+    def show_final_state():
+        # Create side-by-side plots for velocity and temperature
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Subsample data for cleaner visualization (every 2nd point)
+        X_plot = X
+        Y_plot = Y
+        u_plot = u
+        v_plot = v
+        T_plot = T
+        
+        # Left plot: Velocity magnitude with streamlines
+        velocity_magnitude = np.sqrt(u_plot**2 + v_plot**2)
+        im1 = ax1.contourf(X_plot, Y_plot, velocity_magnitude, cmap="viridis", levels=20)
+        ax1.set_title("Velocity Magnitude [m/s]", fontsize=14, fontweight='bold')
+        ax1.set_xlabel("x [m]", fontsize=12)
+        ax1.set_ylabel("y [m]", fontsize=12)
+        cbar1 = plt.colorbar(im1, ax=ax1)
+        cbar1.set_label("Velocity [m/s]", fontsize=11)
+        
+        # Add streamlines (subsample more for clarity)
+        X_stream = X
+        Y_stream = Y
+        u_stream = u
+        v_stream = v
+        ax1.streamplot(X_stream, Y_stream, u_stream, v_stream, 
+                    color="white", density=1.5, arrowsize=1.2, linewidth=0.8)
+        
+        # Right plot: Temperature distribution
+        im2 = ax2.contourf(X_plot, Y_plot, T_plot, cmap="coolwarm", levels=20)
+        ax2.set_title("Temperature Distribution [K]", fontsize=14, fontweight='bold')
+        ax2.set_xlabel("x [m]", fontsize=12)
+        ax2.set_ylabel("y [m]", fontsize=12)
+        cbar2 = plt.colorbar(im2, ax=ax2)
+        cbar2.set_label("Temperature [K]", fontsize=11)
+        
+        # Set axis properties for both plots
+        for ax in [ax1, ax2]:
+            ax.set_xlim(0, LX)
+            ax.set_ylim(0, LY)
+            ax.set_aspect('equal')
+            ax.grid(True, alpha=0.3)
+        
+        # Add simulation info as text
+        info_text = (f"Grid: {NX}×{NY}, dt = {dt:.1e} s\n"
+                    f"Re ≈ {INLET_VELOCITY * LY / KINEMATIC_VISCOSITY:.0f}, "
+                    f"Pe ≈ {INLET_VELOCITY * LY / THERMAL_DIFFUSIVITY:.0f}")
+        fig.suptitle(f"2D Navier-Stokes with Heat Transfer\n{info_text}", 
+                    fontsize=12, y=0.98)
+        
+        plt.tight_layout()
+        plt.show()
+        return _
+
+    def animate(val_hist):    
+        # --- Create animation ---
+        fig, ax = plt.subplots()
+        cax = ax.pcolormesh(X, Y, val_hist[0], shading='auto', cmap='viridis')
+        fig.colorbar(cax)
+
+        def update(frame):
+            cax.set_array(val_hist[frame].ravel())
+            ax.set_title(f"Time: {frame*dt:.4f} s")
+            return cax,
+
+        anim = FuncAnimation(fig, update, frames=len(val_hist), interval=50, blit=False)
+        plt.show()
+        return _
     
-    # Create side-by-side plots for velocity and temperature
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-    
-    # Subsample data for cleaner visualization (every 2nd point)
-    X_plot = X[::2, ::2]
-    Y_plot = Y[::2, ::2]
-    u_plot = u[::2, ::2]
-    v_plot = v[::2, ::2]
-    T_plot = T[::2, ::2]
-    
-    # Left plot: Velocity magnitude with streamlines
-    velocity_magnitude = np.sqrt(u_plot**2 + v_plot**2)
-    im1 = ax1.contourf(X_plot, Y_plot, velocity_magnitude, cmap="viridis", levels=20)
-    ax1.set_title("Velocity Magnitude [m/s]", fontsize=14, fontweight='bold')
-    ax1.set_xlabel("x [m]", fontsize=12)
-    ax1.set_ylabel("y [m]", fontsize=12)
-    cbar1 = plt.colorbar(im1, ax=ax1)
-    cbar1.set_label("Velocity [m/s]", fontsize=11)
-    
-    # Add streamlines (subsample more for clarity)
-    X_stream = X[::4, ::4]
-    Y_stream = Y[::4, ::4]
-    u_stream = u[::4, ::4]
-    v_stream = v[::4, ::4]
-    ax1.streamplot(X_stream, Y_stream, u_stream, v_stream, 
-                   color="white", density=1.5, arrowsize=1.2, linewidth=0.8)
-    
-    # Right plot: Temperature distribution
-    im2 = ax2.contourf(X_plot, Y_plot, T_plot, cmap="coolwarm", levels=20)
-    ax2.set_title("Temperature Distribution [K]", fontsize=14, fontweight='bold')
-    ax2.set_xlabel("x [m]", fontsize=12)
-    ax2.set_ylabel("y [m]", fontsize=12)
-    cbar2 = plt.colorbar(im2, ax=ax2)
-    cbar2.set_label("Temperature [K]", fontsize=11)
-    
-    # Set axis properties for both plots
-    for ax in [ax1, ax2]:
-        ax.set_xlim(0, LX)
-        ax.set_ylim(0, LY)
-        ax.set_aspect('equal')
-        ax.grid(True, alpha=0.3)
-    
-    # Add simulation info as text
-    info_text = (f"Grid: {NX}×{NY}, dt = {dt:.1e} s\n"
-                f"Re ≈ {INLET_VELOCITY * LY / KINEMATIC_VISCOSITY:.0f}, "
-                f"Pe ≈ {INLET_VELOCITY * LY / THERMAL_DIFFUSIVITY:.0f}")
-    fig.suptitle(f"2D Navier-Stokes with Heat Transfer\n{info_text}", 
-                fontsize=12, y=0.98)
-    
-    plt.tight_layout()
-    plt.show()
-    
+
+    show_final_state()
+    animate(v_hist)
+
     return 0
 
 
