@@ -1,7 +1,7 @@
 # ns2d_viscous.py
 import numpy as np
 import matplotlib.pyplot as plt
-import math
+from matplotlib.animation import FuncAnimation
 
 # ---------------------------
 # Physical constants (air/H2 placeholders)
@@ -182,6 +182,10 @@ def apply_boundary_viscous(U, T_wall_bottom=350.0):
     U[:, -1, 0] = U[:, -2, 0]
     U[:, -1, 3] = U[:, -2, 3]
 
+    #make a nozzle in the first 20% of the tank by setting u, v, E and rho = 0 in a box on the left top and bottom
+    #U[0:int(0.2*Nx), 0:int(0.2*Ny), :] = 1e-8
+    #U[0:int(0.2*Nx), -int(0.2*Ny):, :] = 1e-8
+
     return U
 
 # ---------------------------
@@ -249,11 +253,11 @@ def main():
         if n % 100 == 0 or n == nt-1:
             print(f"Step {n+1}/{nt} dt={dt:.2e} | mean u={np.mean(u):.3f} | max u={np.max(u):.3f} | max T={np.max(T):.2f}")
         # store occasional fields (optional)
-        if n % 200 == 0:
-            history.append((n, rho.copy(), u.copy(), p.copy(), T.copy()))
+        history.append((n, rho.copy(), u.copy(), p.copy(), T.copy()))
 
     # final primitives
     rho, u, v, p, T = primitive_vars(U)
+    print(f"Simulation Time : {nt*dt:.4f} s")
 
     # ---------------------------
     # Plots
@@ -270,17 +274,22 @@ def main():
     plt.tight_layout()
     plt.show()
 
-    # Streamlines
-    plt.figure(figsize=(8, 4))
-    speed = np.sqrt(u**2 + v**2)
-    lw = 2 * speed / (speed.max() + 1e-12)
-    plt.streamplot(X.T, Y.T, u.T, v.T, color=speed.T, linewidth=lw.T, cmap='viridis', density=2)
-    plt.xlabel('x [m]')
-    plt.ylabel('y [m]')
-    plt.colorbar(label='Speed [m/s]')
-    plt.title('Streamlines')
-    plt.tight_layout()
-    plt.show()
+    def animate(history):    
+        # --- Create animation ---
+        fig, ax = plt.subplots()
+        cax = ax.pcolormesh(X, Y, history[0][2], shading='auto', cmap='viridis')
+        fig.colorbar(cax)
+
+        def update(frame):
+            cax.set_array(history[frame][2].ravel())
+            ax.set_title(f"Time: {frame*dt:.5f} s")
+            return cax,
+        anim = FuncAnimation(fig, update, frames=len(history), interval=50, blit=False)
+        plt.show()
+
+    animate(history)
+
+    return 0
 
 if __name__ == "__main__":
     main()

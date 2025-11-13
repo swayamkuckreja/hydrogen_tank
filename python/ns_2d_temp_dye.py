@@ -193,7 +193,7 @@ def main():
         
         # center box of walls for fun
         BOX = False
-        TANK = True
+        TANK = False
         if BOX == True:
             u[int(np.floor(NY/3)):int(np.floor(2*NY/3)),int(np.floor(2*NX/5)):int(np.floor(3*NX/5))] = 0.0
             v[int(np.floor(NY/3)):int(np.floor(2*NY/3)),int(np.floor(2*NX/5)):int(np.floor(3*NX/5))] = 0.0
@@ -449,7 +449,7 @@ def main():
     
 
     show_final_state()
-    animate(v_hist)
+    animate(u_hist)
 
     return 0
 
