@@ -1,0 +1,12 @@
+# Ignore solution output files
+sol_*
+
+# VTK output files
+*.vtu
+*.pvtu
+*.pvd
+
+# Julia compiled files
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
