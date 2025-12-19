@@ -211,7 +211,11 @@ function ferrite_limiter!(u, _, p, t)
     return apply!(u, p.ch)
 end
 
-# Nonlinear convection for velocity
+# GENERAL IDEA: 
+# We solve MUdot = R(U) and we need also give solver J
+# R = KU + N(U). So linear term + nonlinear stuff
+# N(U) = [N1 0 N2]^T
+# Nonlinear convection for velocity N1 from momemtum equation
 function navierstokes_rhs_element!(dvₑ, vₑ, cellvalues_v)
     n_basefuncs = getnbasefunctions(cellvalues_v)
     for q_point in 1:getnquadpoints(cellvalues_v)
@@ -226,7 +230,7 @@ function navierstokes_rhs_element!(dvₑ, vₑ, cellvalues_v)
     return
 end
 
-# Temperature advection (passive scalar)
+# Temperature advection (passive scalar) N2 from energy equation
 function temp_advection_element!(dTₑ, Tₑ, vₑ, cellvalues_T, cellvalues_v)
     n_basefuncs = getnbasefunctions(cellvalues_T)
     for q_point in 1:getnquadpoints(cellvalues_T)
@@ -287,7 +291,8 @@ function navierstokes_temp!(du, u_uc, p::RHSparams, t)
     return
 end
 
-# Jacobian for velocity
+# J = dR(U)/dU = K + C(U)
+# Jacobian for velocity block C(1,1)
 function navierstokes_jac_element!(Jₑ, vₑ, cellvalues_v)
     n_basefuncs = getnbasefunctions(cellvalues_v)
     for q_point in 1:getnquadpoints(cellvalues_v)
@@ -306,7 +311,7 @@ function navierstokes_jac_element!(Jₑ, vₑ, cellvalues_v)
     return
 end
 
-# Jacobian for temperature advection
+# Jacobian for temperature advection block C(3,3)
 function temp_jac_element!(Jₑ, vₑ, cellvalues_T, cellvalues_v)
     n_basefuncs = getnbasefunctions(cellvalues_T)
     for q_point in 1:getnquadpoints(cellvalues_T)
@@ -323,49 +328,102 @@ function temp_jac_element!(Jₑ, vₑ, cellvalues_T, cellvalues_v)
     return
 end
 
+# Jacobian coupling: temperature equation wrt velocity block C(3,1)
+function temp_vel_jac_element!(Jₑ, Tₑ, cellvalues_T, cellvalues_v)
+    nT = getnbasefunctions(cellvalues_T)
+    nv = getnbasefunctions(cellvalues_v)
+    for q_point in 1:getnquadpoints(cellvalues_T)
+        dΩ = getdetJdV(cellvalues_T, q_point)
+        ∇T = function_gradient(cellvalues_T, q_point, Tₑ)
+        for k in 1:nT                      # temperature test
+            φT = shape_value(cellvalues_T, q_point, k)
+            for i in 1:nv                  # velocity trial
+                φv = shape_value(cellvalues_v, q_point, i)
+                Jₑ[k, i] -= (φv ⋅ ∇T) * φT * dΩ
+            end
+        end
+    end
+    return
+end
+
 # Combined Jacobian
-function navierstokes_temp_jac!(J, u_uc, p, t)
+function navierstokes_temp_jac!(J::SparseMatrixCSC, u_uc::Vector, p::RHSparams, t::Float64)
     @unpack K, ch, dh, cellvalues_v, cellvalues_T, u = p
 
+    # Copy solution into working vector and apply constraints
     u .= u_uc
     update!(ch, t)
     apply!(u, ch)
 
-    # Start from K
-    nonzeros(J) .= nonzeros(K)
+    # Start from linear term K
+    J .= K
 
-    assembler = start_assemble(J; fillzero = false)
-
-    # Velocity Jacobian
+    # DOF ranges
     v_range = dof_range(dh, :v)
-    n_basefuncs_v = getnbasefunctions(cellvalues_v)
-    Jₑ = zeros(n_basefuncs_v, n_basefuncs_v)
-    vₑ = zeros(n_basefuncs_v)
-    for cell in CellIterator(dh)
-        Ferrite.reinit!(cellvalues_v, cell)
-        v_celldofs = @view celldofs(cell)[v_range]
-        vₑ .= @views u[v_celldofs]
-        fill!(Jₑ, 0.0)
-        navierstokes_jac_element!(Jₑ, vₑ, cellvalues_v)
-        assemble!(assembler, v_celldofs, Jₑ)
-    end
-
-    # Temperature Jacobian
     T_range = dof_range(dh, :T)
+
+    n_basefuncs_v = getnbasefunctions(cellvalues_v)
     n_basefuncs_T = getnbasefunctions(cellvalues_T)
+
+    # Temporary element matrices
+    Jvₑ = zeros(n_basefuncs_v, n_basefuncs_v)
     JTₑ = zeros(n_basefuncs_T, n_basefuncs_T)
+    JT_vₑ = zeros(n_basefuncs_T, n_basefuncs_v)
+
+    vₑ = zeros(n_basefuncs_v)
+    Tₑ = zeros(n_basefuncs_T)
+
+    # Loop over all cells
     for cell in CellIterator(dh)
-        Ferrite.reinit!(cellvalues_T, cell)
         Ferrite.reinit!(cellvalues_v, cell)
+        Ferrite.reinit!(cellvalues_T, cell)
+
         celld = celldofs(cell)
-        T_celldofs = @view celld[T_range]
         v_celldofs = @view celld[v_range]
+        T_celldofs = @view celld[T_range]
+
+        # Local solution vectors
         vₑ .= @views u[v_celldofs]
+        Tₑ .= @views u[T_celldofs]
+
+        # Fill local element Jacobians
+        fill!(Jvₑ, 0.0)
         fill!(JTₑ, 0.0)
+        fill!(JT_vₑ, 0.0)
+
+        navierstokes_jac_element!(Jvₑ, vₑ, cellvalues_v)
         temp_jac_element!(JTₑ, vₑ, cellvalues_T, cellvalues_v)
-        assemble!(assembler, T_celldofs, JTₑ)
+        temp_vel_jac_element!(JT_vₑ, Tₑ, cellvalues_T, cellvalues_v)
+
+        # Insert velocity-velocity block
+        for i_local in 1:length(v_celldofs)
+            i_global = v_celldofs[i_local]
+            for j_local in 1:length(v_celldofs)
+                j_global = v_celldofs[j_local]
+                J[i_global, j_global] += Jvₑ[i_local, j_local]
+            end
+        end
+
+        # Insert temperature-temperature block
+        for i_local in 1:length(T_celldofs)
+            i_global = T_celldofs[i_local]
+            for j_local in 1:length(T_celldofs)
+                j_global = T_celldofs[j_local]
+                J[i_global, j_global] += JTₑ[i_local, j_local]
+            end
+        end
+
+        # Insert temperature-velocity block (off-diagonal 3,1)
+        for i_local in 1:length(T_celldofs)
+            i_global = T_celldofs[i_local]
+            for j_local in 1:length(v_celldofs)
+                j_global = v_celldofs[j_local]
+                J[i_global, j_global] += JT_vₑ[i_local, j_local]
+            end
+        end
     end
 
+    # Apply Dirichlet constraints
     return apply!(J, ch)
 end
 
