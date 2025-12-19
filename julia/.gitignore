@@ -1,5 +1,5 @@
 # Ignore solution output files
-sol_*
+sol
 
 # VTK output files
 *.vtu
