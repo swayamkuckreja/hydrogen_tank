@@ -1,0 +1,13 @@
+1. humans define general shape def.
+
+1.5 generate a truss structure
+
+2. calculate stress for the truss structure
+
+3. calculate objective function score min(W), constraint simga < sigma_yield
+
+4. tweak some parameters (OPTIMSATION LIBRARY)
+
+5. repeat 1.5 -> 5 until converged
+
+6. done
