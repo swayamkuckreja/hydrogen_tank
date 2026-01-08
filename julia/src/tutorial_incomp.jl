@@ -58,6 +58,7 @@ vᵢₙ(t) = min(t * 1.5, 1.5) #inflow velocity
 
 parabolic_inflow_profile(x, t) = Vec((4 * vᵢₙ(t) * x[2] * (0.41 - x[2]) / 0.41^2, 0.0))
 inflow_bc = Dirichlet(:v, ∂Ω_inflow, parabolic_inflow_profile, [1, 2])
+
 add!(ch, inflow_bc);
 
 ∂Ω_free = getfacetset(grid, "right");
@@ -226,6 +227,7 @@ function navierstokes_jac_element!(Jₑ, vₑ, cellvalues_v)
             for i in 1:n_basefuncs
                 φᵢ = shape_value(cellvalues_v, q_point, i)
                 ∇φᵢ = shape_gradient(cellvalues_v, q_point, i)
+
                 Jₑ[j, i] -= (φᵢ ⋅ ∇v' + v ⋅ ∇φᵢ') ⋅ φⱼ * dΩ
             end
         end

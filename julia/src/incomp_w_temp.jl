@@ -1,7 +1,11 @@
+println("Starting code execution")
+
 # Navier-Stokes with passive temperature scalar
 using Ferrite, SparseArrays, BlockArrays, LinearAlgebra, UnPack, LinearSolve, WriteVTK
 using OrdinaryDiffEq
 using DiffEqBase
+
+print("Dependancies succesfully loaded")
 
 ν = 1.0 / 1000.0  # kinematic viscosity
 κ = 1.0e-4        # thermal diffusivity
@@ -34,13 +38,19 @@ gmsh.model.mesh.generate(dim)
 grid = togrid()
 Gmsh.finalize()
 
+println("Meshing done")
+
 # Finite element spaces
+
 ip_v = Lagrange{RefQuadrilateral, 2}()^2  # velocity Q2 (2D vector)
+
 ip_p = Lagrange{RefQuadrilateral, 1}()     # pressure Q1
 ip_T = Lagrange{RefQuadrilateral, 1}()     # temperature Q1
 
 qr = QuadratureRule{RefQuadrilateral}(4)
 cellvalues_v = CellValues(qr, ip_v)
+
+
 cellvalues_p = CellValues(qr, ip_p)
 cellvalues_T = CellValues(qr, ip_T)
 
@@ -67,8 +77,9 @@ parabolic_inflow_profile(x, t) = Vec((4 * vᵢₙ(t) * x[2] * (0.41 - x[2]) / 0.
 inflow_bc = Dirichlet(:v, ∂Ω_inflow, parabolic_inflow_profile, [1, 2])
 add!(ch, inflow_bc)
 
-# Temperature BC at inlet
-T_inlet(x, t) = 1.0
+# Temperature BC at inlet (ramps up like velocity)
+Tᵢₙ(t) = min(t * 1.5, 1.5)  # Ramp from 0 to 1.5 over time
+T_inlet(x, t) = Tᵢₙ(t)
 temp_bc = Dirichlet(:T, ∂Ω_inflow, (x, t) -> T_inlet(x, t), [1])
 add!(ch, temp_bc)
 
@@ -175,7 +186,7 @@ function assemble_stiffness_matrix(cellvalues_v, cellvalues_p, cellvalues_T, ν,
                 end
             end
         end
-
+        
         assemble!(stiffness_assembler, celldofs(cell), Kₑ)
     end
     return K
@@ -427,6 +438,8 @@ function navierstokes_temp_jac!(J::SparseMatrixCSC, u_uc::Vector, p::RHSparams, 
     return apply!(J, ch)
 end
 
+println("Assembling system...")
+
 # ODE setup
 rhs = ODEFunction(navierstokes_temp!, mass_matrix = M; jac = navierstokes_temp_jac!, jac_prototype = jac_sparsity)
 problem = ODEProblem(rhs, u₀, (0.0, 6.0), p)
@@ -447,6 +460,7 @@ integrator = init(
 )
 
 # VTK output
+println("Solving System Time Steps")
 pvd = paraview_collection("vortex-street-with-temp")
 for (step, (u, t)) in enumerate(intervals(integrator))
     println("Step $step, t = $t, max|u| = $(maximum(abs, u))")
@@ -457,3 +471,4 @@ for (step, (u, t)) in enumerate(intervals(integrator))
 end
 vtk_save(pvd)
 println("Simulation complete!")
+
