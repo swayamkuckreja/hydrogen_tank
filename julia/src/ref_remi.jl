@@ -1,14 +1,14 @@
 using Ferrite
 using SparseArrays
-using LinearAlgebra         # provides mul! 
-using UnPack                # added for time integration using DifferentialEquations.jl 
+using LinearAlgebra         # provides mul!
+using UnPack                # added for time integration using DifferentialEquations.jl
 using OrdinaryDiffEq        # added for time integration using DifferentialEquations.jl
-using DiffEqBase # added for time integration using DifferentialEquations.jl   
+using DiffEqBase # added for time integration using DifferentialEquations.jl
 using WriteVTK
 
-# Mesh definition 
+# Mesh definition
 Lx = 4.0
-Ly = 1.0 
+Ly = 1.0
 h_x = 0.04
 h_y = 0.001
 nx = Int(Lx / h_x ) # 80 / 0.5
@@ -29,13 +29,13 @@ qr_facet = FacetQuadratureRule{RefQuadrilateral}(4)
 fvu = FacetValues(qr_facet, ipu, ipg)
 fvp = FacetValues(qr_facet, ipp, ipg)
 
-# dof handler 
+# dof handler
 dh = DofHandler(grid)
 add!(dh, :u, ipu)
 add!(dh, :p, ipp)
 close!(dh)
 
-# constraint handler 
+# constraint handler
 ch = ConstraintHandler(dh)
 left_boundary = getfacetset(grid, "left")
 ## conditions on the top and on the bottom
@@ -139,7 +139,7 @@ function assemble_stifness_matrix!(K, f, dh, cvu, cvp, μ)
     return K, f
 end;
 
-# dynamic viscosity 
+# dynamic viscosity
 μ = 1
 # time
 T = 5.0
@@ -153,22 +153,22 @@ f = zeros(ndofs(dh))
 K , f = assemble_stifness_matrix!(K, f, dh, cvu, cvp, μ); # assemble the system
 apply!(M,ch)
 jac_sparsity = sparse(K);
-# RHS structure definition 
+# RHS structure definition
 struct RHSparams
     K::SparseMatrixCSC
     f::Vector
     ch::ConstraintHandler
     dh::DofHandler
     cvu::CellValues
-    fvu::FacetValues 
+    fvu::FacetValues
     boundary
     u::Vector
-end 
+end
 u0 = zeros(ndofs(dh));
 # u0 .=1e-9;
 apply!(u0, ch);
 
-# Now, handle the nonlinear BC 
+# Now, handle the nonlinear BC
 ## Parabole velocity at the inlet (left boundary)
 function parabole_velocity(x,t)
     y = x[2]
@@ -179,14 +179,14 @@ function parabole_velocity(x,t)
     vx = (vx^2)
     return vx
 end
-res_value(u_val, x,t) = (u_val[1]^2- parabole_velocity(x,t)) # à modifier 
+res_value(u_val, x,t) = (u_val[1]^2- parabole_velocity(x,t)) # à modifier
 dures_value(u_val,x) = 2.0 * u_val[1]
 
-# defining the penalty with a ramping 
+# defining the penalty with a ramping
 α = 1000
 t_ramp = 1.0 # secondes
 α_of_t(t) = α * min(t/t_ramp, 1.0)
-# 
+#
 tol_in = 0.0011
 H = 1.0
 
@@ -200,26 +200,26 @@ end;
 # Assembly of the non linear contribution in the residual
 function assemble_nonlinear_residual!(Re::Vector, u_e::Vector, fvu::FacetValues, cvu::CellValues, facet, t::Float64)
     local_ndofs = length(u_e)
-    nφ = div(local_ndofs, 2) 
+    nφ = div(local_ndofs, 2)
     n_basefuncs_facet_u = getnbasefunctions(fvu)
     ndofs_u = 2  # nombre de composantes de vitesse en 2D
     # Element residual for the non linear CL
     # Loop over the quadrature points of the facet
     for q_point in 1:getnquadpoints(fvu)
         x = spatial_coordinate(fvu, q_point,getcoordinates(facet))
-        dΓ = getdetJdV(fvu, q_point) # getting the weight 
+        dΓ = getdetJdV(fvu, q_point) # getting the weight
         u_q_point = function_value(fvu, q_point, u_e)
-        res_q_point = res_value(u_q_point, x, t) # residual compared to the target value 
-        # Loop over the shape functions of the facet 
+        res_q_point = res_value(u_q_point, x, t) # residual compared to the target value
+        # Loop over the shape functions of the facet
         for i in 1:nφ
-            
+
             ϕ_vec = shape_value(fvu, q_point, i)  # VectorValue(ϕx, ϕy)
             ϕx = ϕ_vec[1]
             ix = 2*i - 1
             if !(x[2] <= tol_in || x[2] >= H - tol_in)
                 Re[ix] -= α_of_t(t) * res_q_point * ϕx * dΓ
             end
-            
+
             #=
             if i%2 ==1 #test to modify only the horizontal velocity component
                 #if !(x[2]<= tol_in || x[2] >= H - tol_in)
@@ -229,34 +229,34 @@ function assemble_nonlinear_residual!(Re::Vector, u_e::Vector, fvu::FacetValues,
                 #end
             end
             =#
-            
+
         end
-    end 
+    end
     return
-end 
+end
 
 function stokes_residual!(R, u_current, p::RHSparams, t::Float64)
-    @unpack K, f, ch, dh, cvu, fvu, boundary, u = p  
+    @unpack K, f, ch, dh, cvu, fvu, boundary, u = p
     u .= u_current
     Ferrite.update!(ch, t)
     apply!(u, ch)
     ## residual, linear contribution
     R .= f
     mul!(R, K, u, -1.0, 1.0)
-    ## residual, non linear contribution 
+    ## residual, non linear contribution
     u_range = dof_range(dh, :u)
     ndofs_u = 2
     n_basefuncs_facet_u = getnbasefunctions(fvu)
     # Re = zeros(n_basefuncs_facet_u) ############
     #u_e = zeros(n_basefuncs_facet_u) ############
     for facet in FacetIterator(dh, boundary)
-        
+
         Ferrite.reinit!(fvu, facet)
         u_boundary_facetdofs = @view celldofs(facet)[u_range]
         local_ndofs = length(u_boundary_facetdofs)            # = 2 * getnbasefunctions(fvu)
         u_e = similar(u, local_ndofs); u_e .= @views u[u_boundary_facetdofs]
         Re  = zeros(local_ndofs)
-    
+
         assemble_nonlinear_residual!(Re, u_e, fvu, cvu, facet, t)  # ← passe bien t
         assemble!(R, u_boundary_facetdofs, Re)
         #=
@@ -271,33 +271,33 @@ function stokes_residual!(R, u_current, p::RHSparams, t::Float64)
         assemble!(R, u_boundary_facetdofs, Re)
         #@show u_boundary_facetdofs
         =#
-        
-        
-    end 
-    #R[1] = 0 
+
+
+    end
+    #R[1] = 0
     #@show R
-    #@show u 
-    
-    return 
+    #@show u
+
+    return
 end;
 
 function assemble_nonlinear_jac!(Je, u_e::Vector, fvu::FacetValues, cvu::CellValues, facet, t::Float64)
     n_basefuncs_facet_u = getnbasefunctions(fvu)
     local_ndofs = length(u_e)
-    nφ = div(local_ndofs, 2) 
+    nφ = div(local_ndofs, 2)
     for q_point in 1:getnquadpoints(fvu)
-        dΓ = getdetJdV(fvu, q_point) # getting the weight 
+        dΓ = getdetJdV(fvu, q_point) # getting the weight
         u_q_point = function_value(fvu, q_point, u_e)
-        # compute the value that we will be using in the non linear jacobian 
+        # compute the value that we will be using in the non linear jacobian
         x = spatial_coordinate(fvu, q_point, getcoordinates(facet))
-        du_res_q_point = dures_value(u_q_point,x)  
-        # Loop over the test functions of the facet 
+        du_res_q_point = dures_value(u_q_point,x)
+        # Loop over the test functions of the facet
         for i in 1:nφ
-            
+
             ϕ_vec = shape_value(fvu, q_point, i)  # VectorValue(ϕx, ϕy)
             ϕ_i_x = ϕ_vec[1]
             ix = 2*i - 1
-            for j in 1:nφ 
+            for j in 1:nφ
                 ϕ_j = shape_value(fvu, q_point, j)
                 ϕ_j_x = ϕ_j[1]
                 jx = 2*j - 1
@@ -315,20 +315,20 @@ function assemble_nonlinear_jac!(Je, u_e::Vector, fvu::FacetValues, cvu::CellVal
                         ϕ_j = shape_value(fvu, q_point, j)
                         ϕ_j_x = ϕ_j[1]
                         Je[i,j] -= α_of_t(t) * du_res_q_point * ϕ_i_x * ϕ_j_x * dΓ # contribution to the non linear jacobian
-                        
+
                         #end
                     end
                 end
             end
             =#
-            
+
         end
-    end 
+    end
     return
-end 
+end
 
 function stokes_jac!(J, u_current, p::RHSparams, t::Float64)
-    @unpack  K, f, ch, dh, cvu, fvu, boundary, u = p  # getting the parameters values 
+    @unpack  K, f, ch, dh, cvu, fvu, boundary, u = p  # getting the parameters values
     u .= u_current
     Ferrite.update!(ch, t)
     apply!(u, ch)
@@ -343,16 +343,16 @@ function stokes_jac!(J, u_current, p::RHSparams, t::Float64)
     #u_e = zeros(n_basefuncs_facet_u) #########
     # Non linear contribution
     for facet in FacetIterator(dh, boundary)
-        
+
         Ferrite.reinit!(fvu, facet)
         u_boundary_facetdofs = @view celldofs(facet)[u_range]
         local_ndofs = length(u_boundary_facetdofs)            # = 2 * getnbasefunctions(fvu)
         u_e = similar(u, local_ndofs); u_e .= @views u[u_boundary_facetdofs]
         Je  = zeros(local_ndofs,local_ndofs)
-    
-        assemble_nonlinear_jac!(Je, u_e, fvu, cvu, facet, t)  
+
+        assemble_nonlinear_jac!(Je, u_e, fvu, cvu, facet, t)
         assemble!(assembler, u_boundary_facetdofs, Je)
-        
+
         #=
         Ferrite.reinit!(fvu, facet)
         u_boundary_facetdofs = @view celldofs(facet)[u_range]
@@ -412,7 +412,7 @@ sol_stokes = DifferentialEquations.solve(problem, timestepper;
 pvd = paraview_collection("stokes-transient-2D")
 for (k, (t, u)) in enumerate(zip(sol_stokes.t, sol_stokes.u))
     VTKGridFile("stokes-transient-2D$(lpad(k, 4, '0'))", dh) do vtk
-        write_solution(vtk, dh, u)                       
+        write_solution(vtk, dh, u)
         pvd[t]                    = vtk
     end
 end

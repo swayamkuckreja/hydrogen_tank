@@ -101,6 +101,7 @@ function assemble_mass_matrix(cellvalues_v::CellValues, cellvalues_p::CellValues
     return M
 end;
 
+# NOTE: For now I dont add Remi's fe stuff to this function
 function assemble_stokes_matrix(cellvalues_v::CellValues, cellvalues_p::CellValues, ν, K::SparseMatrixCSC, dh::DofHandler)
     # Again, some buffers and helpers
     n_basefuncs_v = getnbasefunctions(cellvalues_v)
@@ -154,5 +155,115 @@ const T = 5.0 # sim time
 Δt₀ = 0.001
 Δt_save = 0.1
 
-# Matrix creations
+# Matrix allocations
+M = allocate_matrix(dh);
+M = assemble_mass_matrix(cvu, cvp, M, dh);
+K = allocate_matrix(dh);
+f = zeros(ndofs(dh));
+K = assemble_stokes_matrix(cvu, cvp, K, dh);
+apply!(M, ch)
+jac_sparsity = sparse(K); # might need to change this to different sparse formate if T var is added
+
+u0 = zeros(ndofs(dh));
+apply!(u0, ch);
+
+
+# RHS structure definition 
+struct RHSparams
+    K::SparseMatrixCSC
+    f::Vector
+    ch::ConstraintHandler
+    dh::DofHandler
+    cvu::CellValues
+    fvu::FacetValues 
+    boundary
+    u::Vector
+end 
+p = RHSparams(K, f, ch, dh, cvu, fvu, left_boundary, copy(u0));
+
+p0 = 1.0 # Pa total pressure
+rho = 2.0 # density
+# Now, handle the nonlinear BC 
+function total_pressure_based_velocity(p_val, x, t) # NOTE: change this to enforce bernoulis equation 
+    # y = x[2]
+    # H = 1.0
+    # ξ = (2*y - H)/H
+    # Vmax(t::Float64) = min(t * 2.0, 2.0)
+    # vx = Vmax(t) * (1 - ξ^2)
+    # return p0 - 0.5*rho*(vx^2)
+    vx_expected = sqrt((p0 - p_val) * 2 / rho) # Based on bernoulis equation, p0 = p + 0.5 * rho * v^2
+    return vx_expected**2
+end;
+res_value(u_val, p_val, x, t) = (u_val[1]^2 - total_pressure_based_velocity(p_val, x, t))
+dres_value_du(u_val, x) = 2.0 * u_val[1]
+dres_value_dp(p_val, x) = 0.5 * (2.0 * p_val / rho)**(-0.5) # TODO: Check
+
+# Defining the penalty with a ramping 
+α = 1000
+t_ramp = 1.0 # secondes
+α_of_t(t) = α * min(t/t_ramp, 1.0)
 # 
+tol_in = 0.0011
+H = 1.0
+
+function ferrite_limiter!(u, _, p, t)
+    Ferrite.update!(p.ch, t)
+    return apply!(u, p.ch)
+end;
+
+# Assembly of the non linear contribution in the residual
+function assemble_nonlinear_residual!(Re::Vector, u_e::Vector, p_e::Vector, fvu::FacetValues, cvu::CellValues, facet, t::Float64) # NOTE: I added the p_e::Vector arugment
+    local_ndofs_u = length(u_e) # TODO: Idk if local_ndof_u will be same as local_ndof_p
+    local_ndof_p = length(p_e) 
+
+    if local_ndof_p == local_ndofs_u:
+        println("Warning: local_ndof_p is equal to local_ndof_u, check if this is expected")
+    end
+
+    nφ_u = div(local_ndofs_u, 2) 
+    n_basefuncs_facet_u = getnbasefunctions(fvu)
+    ndofs_u = 2  # nombre de composantes de vitesse en 2D
+    # Element residual for the non linear CL
+    # Loop over the quadrature points of the facet
+    for q_point in 1:getnquadpoints(fvu)
+        x = spatial_coordinate(fvu, q_point,getcoordinates(facet))
+        dΓ = getdetJdV(fvu, q_point) # getting the weight
+        u_q_point = function_value(fvu, q_point, u_e)
+        p_q_point = function_value(fvp, q_point, p_e)
+        res_q_point = res_value(u_q_point, p_q_point, x, t) # TODO: Ig I need loop over both u and p in the same loop since I need both u_val and p_val to find residual??
+        # Loop over the shape functions of the facet 
+        for i in 1:nφ_u
+            ϕ_vec = shape_value(fvu, q_point, i)  # VectorValue(ϕx, ϕy)
+            ϕx = ϕ_vec[1]
+            ix = 2*i - 1
+            if !(x[2] <= tol_in || x[2] >= H - tol_in) # TODO: Understand whats happining here 
+                Re[ix] -= α_of_t(t) * res_q_point * ϕx * dΓ # TODO: Understand whats happening here
+            end
+        end
+    end 
+    
+    # TODO: Finish/ change if both u and p need to looped once all together.
+    local_ndof_p =  lenght(p_e)
+    nφ_p = div(local_ndofs_p, 1) # TODO: Idk if this should be 1 or 2 
+    n_basefuncs_facet_p = getnbasefunctions(fvp)
+    ndofs_p = 1 # Scalar thats why 1 maybe?
+    for q_point in 1:getnquadpoints(fvp)
+        x = spatial_coordinate(fvp, q_point,getcoordinates(facet))
+        dΓ = getdetJdV(fvp, q_point) # getting the weight 
+        p_q_point = function_value(fvp, q_point, p_e)
+        res_q_point = res_value(p_q_point, x, t) # residual compared to the target value 
+        # Loop over the shape functions of the facet 
+        for i in 1:nφ_u
+            ϕ_vec = shape_value(fvu, q_point, i)  # VectorValue(ϕx, ϕy)
+            ϕx = ϕ_vec[1]
+            ix = 2*i - 1
+            if !(x[2] <= tol_in || x[2] >= H - tol_in) # TODO: Understand whats happining here 
+                Re[ix] -= α_of_t(t) * res_q_point * ϕx * dΓ # TODO: Understand whats happening here
+            end
+        end
+    end 
+   
+    return
+end 
+
+
