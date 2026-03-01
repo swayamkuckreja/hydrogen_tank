@@ -35,11 +35,6 @@ println("Dependencies loaded!")
 # Jacobian blocks:
 #   ∂F_i/∂u_x_j = -α · 2 u_x · φ_x_i · φ_x_j  dΓ    [u-u block]
 #   ∂F_i/∂p_j   = -α · (2/ρ) · φ_x_i · ψ_j    dΓ    [u-p block]
-#
-# KEY DIFFERENCES FROM p0_inlet_v3.jl:
-#   - No (u·∇)u convection term → purely linear PDE, nonlinearity only in BC
-#   - Cleaner sign convention following incomp_w_temp.jl (R = +K*u + N_BC)
-#   - Explicit inline Jacobian u-p block in the dedicated Jacobian function
 # =============================================================================
 
 # ---------------------------------------------------------------------------

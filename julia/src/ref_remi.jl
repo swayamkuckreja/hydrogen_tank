@@ -1,3 +1,5 @@
+# This is code written by Remi for a non linear BC. Untested though so use with caution.
+
 using Ferrite
 using SparseArrays
 using LinearAlgebra         # provides mul!
