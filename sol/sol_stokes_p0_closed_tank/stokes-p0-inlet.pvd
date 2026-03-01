@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VTKFile type="Collection" version="1.0" byte_order="LittleEndian" compressor="vtkZLibDataCompressor">
+  <Collection>
+    <DataSet timestep="0.0" part="0" file="stokes-p0-inlet-0001.vtu"/>
+    <DataSet timestep="0.0022289458236242374" part="0" file="stokes-p0-inlet-0002.vtu"/>
+    <DataSet timestep="0.0032452049237455837" part="0" file="stokes-p0-inlet-0003.vtu"/>
+    <DataSet timestep="0.005351355124355089" part="0" file="stokes-p0-inlet-0004.vtu"/>
+    <DataSet timestep="0.006970170878315071" part="0" file="stokes-p0-inlet-0005.vtu"/>
+    <DataSet timestep="0.00923966227660193" part="0" file="stokes-p0-inlet-0006.vtu"/>
+    <DataSet timestep="0.011575674449602925" part="0" file="stokes-p0-inlet-0007.vtu"/>
+    <DataSet timestep="0.01441297709939997" part="0" file="stokes-p0-inlet-0008.vtu"/>
+    <DataSet timestep="0.017591551468258224" part="0" file="stokes-p0-inlet-0009.vtu"/>
+    <DataSet timestep="0.021321391479688073" part="0" file="stokes-p0-inlet-0010.vtu"/>
+    <DataSet timestep="0.025612145020095612" part="0" file="stokes-p0-inlet-0011.vtu"/>
+    <DataSet timestep="0.03062115826499683" part="0" file="stokes-p0-inlet-0012.vtu"/>
+    <DataSet timestep="0.0364484422943156" part="0" file="stokes-p0-inlet-0013.vtu"/>
+    <DataSet timestep="0.04326960570766403" part="0" file="stokes-p0-inlet-0014.vtu"/>
+    <DataSet timestep="0.051262964294464065" part="0" file="stokes-p0-inlet-0015.vtu"/>
+    <DataSet timestep="0.06066657086588487" part="0" file="stokes-p0-inlet-0016.vtu"/>
+    <DataSet timestep="0.07175684056950743" part="0" file="stokes-p0-inlet-0017.vtu"/>
+    <DataSet timestep="0.08488096120875314" part="0" file="stokes-p0-inlet-0018.vtu"/>
+    <DataSet timestep="0.10045881668185529" part="0" file="stokes-p0-inlet-0019.vtu"/>
+    <DataSet timestep="0.11901165502626487" part="0" file="stokes-p0-inlet-0020.vtu"/>
+    <DataSet timestep="0.14118128593634802" part="0" file="stokes-p0-inlet-0021.vtu"/>
+    <DataSet timestep="0.167766154155164" part="0" file="stokes-p0-inlet-0022.vtu"/>
+    <DataSet timestep="0.19976005488884852" part="0" file="stokes-p0-inlet-0023.vtu"/>
+    <DataSet timestep="0.23840740567904245" part="0" file="stokes-p0-inlet-0024.vtu"/>
+    <DataSet timestep="0.2852713657567783" part="0" file="stokes-p0-inlet-0025.vtu"/>
+    <DataSet timestep="0.3423252099162475" part="0" file="stokes-p0-inlet-0026.vtu"/>
+    <DataSet timestep="0.41207018836561776" part="0" file="stokes-p0-inlet-0027.vtu"/>
+    <DataSet timestep="0.4976920024436599" part="0" file="stokes-p0-inlet-0028.vtu"/>
+    <DataSet timestep="0.6032679695702149" part="0" file="stokes-p0-inlet-0029.vtu"/>
+    <DataSet timestep="0.7340454689405924" part="0" file="stokes-p0-inlet-0030.vtu"/>
+    <DataSet timestep="0.896802954467647" part="0" file="stokes-p0-inlet-0031.vtu"/>
+    <DataSet timestep="1.0" part="0" file="stokes-p0-inlet-0032.vtu"/>
+    <DataSet timestep="1.2091034427989094" part="0" file="stokes-p0-inlet-0033.vtu"/>
+    <DataSet timestep="2.896790856217141" part="0" file="stokes-p0-inlet-0034.vtu"/>
+  </Collection>
+</VTKFile>
